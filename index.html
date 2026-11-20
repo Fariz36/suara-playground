@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SUARA Playground</title>
+<link rel="icon" href="img/suara-mark.svg" type="image/svg+xml">
 <style>
   @font-face { font-family: "Inter"; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format("woff2"); }
   @font-face { font-family: "Inter"; font-weight: 700; src: url(fonts/inter-latin-700-normal.woff2) format("woff2"); }
@@ -11,7 +12,7 @@
   :root {
     --bg: #F4F7FC; --card: #FFFFFF; --line: #E1E8F2;
     --ink: #0F1B33; --muted: #5B6880;
-    --blue: #1F5FD6; --blue-soft: #E8F0FD;
+    --blue: #0070C0; --blue-soft: #E8F0FD;
     --good: #138A55; --bad: #C93A3F;
   }
   * { box-sizing: border-box; }
@@ -19,8 +20,9 @@
   button { font: inherit; color: inherit; cursor: pointer; }
   :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 
-  header { padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--card); font-weight: 700; font-size: 18px; }
-  header span { color: var(--blue); }
+  header { display: flex; align-items: center; gap: 14px; padding: 12px 28px; border-bottom: 1px solid var(--line); background: var(--card); }
+  header img { display: block; height: 44px; width: auto; }
+  header span { font-weight: 700; font-size: 16px; color: var(--muted); padding-left: 14px; border-left: 1px solid var(--line); }
 
   .wrap { display: grid; grid-template-columns: 240px 1fr; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 24px 28px; }
 
@@ -61,7 +63,7 @@
 </style>
 </head>
 <body>
-<header>SUAR<span>A</span> Playground</header>
+<header><img src="img/suara-logo.svg" alt="SUARA" height="44"><span>Playground</span></header>
 
 <div class="wrap">
   <nav class="list" id="list" aria-label="Samples"></nav>
@@ -113,7 +115,7 @@
     const p = clips[cur].peaks, n = p.length, gap = Math.min(3, w / n * 0.35), bw = Math.max(1, (w - gap * (n - 1)) / n);
     p.forEach((v, i) => {
       const bh = Math.max(3, v * h);
-      ctx.fillStyle = (i + 0.5) / n <= progress ? "#1F5FD6" : "#C9D8F3";
+      ctx.fillStyle = (i + 0.5) / n <= progress ? "#0070C0" : "#C6DDF0";
       ctx.beginPath(); ctx.roundRect(i * (bw + gap), (h - bh) / 2, bw, bh, bw / 2); ctx.fill();
     });
   }
