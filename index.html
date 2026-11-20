@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SUARA Playground</title>
+<style>
+  @font-face { font-family: "Inter"; font-weight: 400; src: url(fonts/inter-latin-400-normal.woff2) format("woff2"); }
+  @font-face { font-family: "Inter"; font-weight: 700; src: url(fonts/inter-latin-700-normal.woff2) format("woff2"); }
+
+  :root {
+    --bg: #F4F7FC; --card: #FFFFFF; --line: #E1E8F2;
+    --ink: #0F1B33; --muted: #5B6880;
+    --blue: #1F5FD6; --blue-soft: #E8F0FD;
+    --good: #138A55; --bad: #C93A3F;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 Inter, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+
+  header { padding: 18px 28px; border-bottom: 1px solid var(--line); background: var(--card); font-weight: 700; font-size: 18px; }
+  header span { color: var(--blue); }
+
+  .wrap { display: grid; grid-template-columns: 240px 1fr; gap: 24px; max-width: 1180px; margin: 0 auto; padding: 24px 28px; }
+
+  .list { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 8px; align-self: start; }
+  .list button { display: block; width: 100%; text-align: left; border: 0; background: none; border-radius: 8px; padding: 8px 12px;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list button:hover { background: var(--bg); }
+  .list button[aria-current="true"] { background: var(--blue-soft); color: var(--blue); font-weight: 700; }
+
+  main { display: flex; flex-direction: column; gap: 16px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; }
+  .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .target { font-size: 22px; font-weight: 700; }
+
+  .player { display: flex; align-items: center; gap: 14px; margin-top: 16px; }
+  .play { display: inline-flex; align-items: center; gap: 8px; border: 0; border-radius: 8px; background: var(--blue); color: #fff;
+          font-weight: 700; padding: 10px 18px; }
+  .play[disabled] { opacity: .6; cursor: default; }
+  .play svg { width: 14px; height: 14px; }
+  #wave { flex: 1; min-width: 0; height: 48px; display: block; }
+
+  .results { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .model { font-weight: 700; }
+  .out { margin-top: 12px; font-size: 22px; min-height: 33px; }
+  .out .idle { font-size: 15px; color: var(--muted); }
+  .out .caret { display: inline-block; width: 2px; height: 1em; background: var(--ink); vertical-align: -3px; margin-left: 2px; animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .verdict { margin-top: 10px; font-size: 14px; font-weight: 700; min-height: 21px; }
+  .good .verdict { color: var(--good); }
+  .bad .verdict { color: var(--bad); }
+
+  @media (max-width: 760px) {
+    .wrap { grid-template-columns: 1fr; padding: 16px; }
+    .list { display: flex; overflow-x: auto; }
+    .list button { width: auto; flex: none; }
+    .results { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<header>SUAR<span>A</span> Playground</header>
+
+<div class="wrap">
+  <nav class="list" id="list" aria-label="Samples"></nav>
+
+  <main>
+    <section class="card">
+      <div class="label">Expected</div>
+      <div class="target" id="target"></div>
+      <div class="player">
+        <button class="play" id="play"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>Play &amp; transcribe</button>
+        <canvas id="wave"></canvas>
+      </div>
+    </section>
+
+    <div class="results">
+      <section class="card" id="A">
+        <div class="model">Whisper (off the shelf)</div>
+        <div class="out"></div>
+        <div class="verdict"></div>
+      </section>
+      <section class="card" id="B">
+        <div class="model">SUARA</div>
+        <div class="out"></div>
+        <div class="verdict"></div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script src="data.js"></script>
+<script>
+(() => {
+  const clips = window.SUARA_CLIPS, $ = id => document.getElementById(id);
+  const audio = new Audio(), list = $("list");
+  let cur = 0, runId = 0;
+  const wait = (ms, id) => new Promise((res, rej) => setTimeout(() => id === runId ? res() : rej("cancel"), ms));
+
+  clips.forEach((c, i) => {
+    const b = document.createElement("button");
+    b.textContent = c.expected; b.onclick = () => select(i);
+    list.appendChild(b);
+  });
+
+  // waveform: bars before the playhead are blue, the rest light blue
+  function drawWave(progress) {
+    const cv = $("wave"), dpr = devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext("2d"); ctx.scale(dpr, dpr);
+    const p = clips[cur].peaks, n = p.length, gap = Math.min(3, w / n * 0.35), bw = Math.max(1, (w - gap * (n - 1)) / n);
+    p.forEach((v, i) => {
+      const bh = Math.max(3, v * h);
+      ctx.fillStyle = (i + 0.5) / n <= progress ? "#1F5FD6" : "#C9D8F3";
+      ctx.beginPath(); ctx.roundRect(i * (bw + gap), (h - bh) / 2, bw, bh, bw / 2); ctx.fill();
+    });
+  }
+  addEventListener("resize", () => drawWave(lastP));
+  let lastP = 0;
+  const setProgress = p => { lastP = p; drawWave(p); };
+
+  function reset(text) {
+    for (const k of ["A", "B"]) {
+      $(k).className = "card";
+      $(k).querySelector(".out").innerHTML = `<span class="idle">${text}</span>`;
+      $(k).querySelector(".verdict").textContent = "";
+    }
+  }
+  function select(i) {
+    runId++; audio.pause(); cur = i; audio.src = clips[i].audio;
+    [...list.children].forEach((b, j) => b.setAttribute("aria-current", j === i));
+    $("target").textContent = clips[i].expected;
+    setProgress(0); $("play").disabled = false;
+    reset("Press play to transcribe");
+  }
+
+  async function type(k, text, ok, id) {
+    const box = $(k), out = box.querySelector(".out");
+    out.textContent = "";
+    const t = document.createTextNode(""), caret = document.createElement("span"); caret.className = "caret";
+    out.append(t, caret);
+    for (let i = 0; i < text.length; i += 2) { await wait(45, id); t.data = text.slice(0, i + 2); }
+    caret.remove();
+    box.classList.add(ok ? "good" : "bad");
+    box.querySelector(".verdict").textContent = ok ? "✓ Correct" : "✕ Wrong";
+  }
+
+  async function run() {
+    const id = ++runId, c = clips[cur];
+    $("play").disabled = true; reset("Listening…");
+    audio.currentTime = 0; audio.play().catch(() => {});
+    const start = performance.now();
+    try {
+      // progress follows the audio; falls back to the clip length if audio can't play
+      while (true) {
+        const p = !audio.paused && audio.currentTime > 0 ? audio.currentTime / (audio.duration || c.seconds) : (performance.now() - start) / 1000 / c.seconds;
+        setProgress(Math.min(1, p));
+        if (audio.ended || p >= 1.05) break;
+        await wait(30, id);
+      }
+      setProgress(1);
+      reset("Transcribing…");
+      await wait(500, id);
+      await Promise.all([type("A", c.baseline, c.baseline_ok, id), wait(250, id).then(() => type("B", c.suara, c.suara_ok, id))]);
+    } catch (e) { if (e !== "cancel") throw e; }
+    finally { if (id === runId) $("play").disabled = false; }
+  }
+
+  $("play").onclick = run;
+  select(0);
+})();
+</script>
+</body>
+</html>

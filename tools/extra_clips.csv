@@ -1,0 +1,2 @@
+clip,audio,expected,whisper_baseline,suara_lora,baseline_exact,suara_exact
+00,audio/00_dagger.wav,dagger,Thank you.,Dagger.,0,1
